@@ -40,6 +40,10 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+.expo/
+.expo-shared/
+dist/
+IT313-Group6-Emergency-Response/IT313-Group6-Emergency-Response/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
