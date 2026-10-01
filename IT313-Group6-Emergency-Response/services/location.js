@@ -111,13 +111,37 @@ export async function getCurrentLocation() {
       };
     }
 
-    // Step 5: Return successful coordinate payload
+    // Step 5: Optional reverse geocoding to resolve human-readable address (non-blocking)
+    let address = null;
+    try {
+      const geocoded = await Location.reverseGeocodeAsync({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+
+      if (geocoded && geocoded.length > 0) {
+        const place = geocoded[0];
+        const parts = [
+          place.name || place.street,
+          place.district || place.subregion,
+          place.city,
+          place.region,
+        ].filter(Boolean);
+        address = parts.length > 0 ? parts.join(', ') : null;
+      }
+    } catch (geoError) {
+      // Non-blocking: If device is offline, coordinates are still delivered safely
+      console.warn('[LocationService] Reverse geocode non-blocking note:', geoError);
+    }
+
+    // Step 6: Return successful coordinate and address payload
     return {
       success: true,
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
       accuracy: position.coords.accuracy,
       timestamp: position.timestamp,
+      address,
       error: null,
     };
   } catch (error) {
@@ -129,8 +153,37 @@ export async function getCurrentLocation() {
       longitude: null,
       accuracy: null,
       timestamp: null,
+      address: null,
       error: error?.message || 'Location cannot be obtained. Please ensure GPS is enabled.',
     };
+  }
+}
+
+/**
+ * Resolves a human-readable street/city address from GPS coordinates.
+ * Non-blocking helper function.
+ * 
+ * @param {number} latitude 
+ * @param {number} longitude 
+ * @returns {Promise<string|null>}
+ */
+export async function getAddressFromCoords(latitude, longitude) {
+  try {
+    const geocoded = await Location.reverseGeocodeAsync({ latitude, longitude });
+    if (geocoded && geocoded.length > 0) {
+      const place = geocoded[0];
+      const parts = [
+        place.name || place.street,
+        place.district || place.subregion,
+        place.city,
+        place.region,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(', ') : null;
+    }
+    return null;
+  } catch (error) {
+    console.warn('[LocationService] getAddressFromCoords error:', error);
+    return null;
   }
 }
 
@@ -139,4 +192,5 @@ export default {
   requestLocationPermission,
   requestLocationPermissions,
   getCurrentLocation,
+  getAddressFromCoords,
 };

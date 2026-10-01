@@ -36,6 +36,7 @@ import { getCurrentLocation } from '../services/location';
 export default function LocationCard({
   latitude,
   longitude,
+  address,
   loading = false,
   errorMessage = null,
   autoFetch = true,
@@ -43,6 +44,7 @@ export default function LocationCard({
 }) {
   // Internal state when component manages its own location fetch
   const [internalCoords, setInternalCoords] = useState(null);
+  const [internalAddress, setInternalAddress] = useState(null);
   const [internalLoading, setInternalLoading] = useState(false);
   const [internalError, setInternalError] = useState(null);
 
@@ -50,6 +52,7 @@ export default function LocationCard({
   const effectiveLoading = loading || internalLoading;
   const effectiveLat = latitude !== undefined && latitude !== null ? latitude : internalCoords?.latitude;
   const effectiveLng = longitude !== undefined && longitude !== null ? longitude : internalCoords?.longitude;
+  const effectiveAddress = address || internalAddress;
   const effectiveError = errorMessage || internalError;
 
   // Handler calling Member 2's location service
@@ -64,6 +67,7 @@ export default function LocationCard({
         latitude: result.latitude,
         longitude: result.longitude,
       });
+      setInternalAddress(result.address || null);
       if (typeof onLocationUpdate === 'function') {
         onLocationUpdate(result);
       }
@@ -148,6 +152,12 @@ export default function LocationCard({
               {typeof effectiveLng === 'number' ? effectiveLng.toFixed(6) : effectiveLng}
             </Text>
           </View>
+          {effectiveAddress ? (
+            <View style={styles.addressBox}>
+              <Text style={styles.addressLabel}>Address / Area:</Text>
+              <Text style={styles.addressValue}>{effectiveAddress}</Text>
+            </View>
+          ) : null}
         </View>
       )}
 
@@ -267,6 +277,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
     fontVariant: ['tabular-nums'],
+  },
+  addressBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E0F2FE',
+  },
+  addressLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0369A1',
+    marginBottom: 2,
+  },
+  addressValue: {
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+    lineHeight: 18,
   },
   messageBox: {
     flexDirection: 'row',
