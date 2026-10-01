@@ -12,19 +12,18 @@ import {
 } from 'react-native';
 
 // ============================================================================
-// MEMBER 1 - REUSABLE PRESENTATION COMPONENTS
+// REUSABLE COMPONENTS (MEMBER 1)
 // ============================================================================
 import EmergencyButton from '../components/EmergencyButton';
 import StatusCard from '../components/StatusCard';
 import EmergencyContact from '../components/EmergencyContact';
 
 // ============================================================================
-// INTEGRATION IMPORTS (MEMBERS 2, 3, 4)
-// When Members 2–4 complete their modules, Member 1 integrates them here:
+// FUTURE MEMBER INTEGRATION IMPORTS (Uncomment upon merging Members 2-4 branches)
 // ============================================================================
-import LocationCard from '../components/LocationCard';    // MEMBER 2 - LOCATION
-import EvidenceCard from '../components/EvidenceCard';    // MEMBER 3 - PHOTO EVIDENCE
-import SensorDisplay from '../components/SensorDisplay';  // MEMBER 4 - SENSORS & STORAGE
+// import LocationCard from '../components/LocationCard';    // MEMBER 2 - LOCATION
+// import EvidenceCard from '../components/EvidenceCard';    // MEMBER 3 - CAMERA / PHOTO EVIDENCE
+// import SensorDisplay from '../components/SensorDisplay';  // MEMBER 4 - SENSOR / STORAGE
 
 /**
  * ============================================================================
@@ -76,7 +75,7 @@ export default function EmergencyScreen() {
 
     Alert.alert(
       '🚨 EMERGENCY BROADCAST ACTIVATED',
-      `Category: ${selectedCategory}\nSeverity: ${severityLevel}\nTime: ${timeString}\nNotes: ${incidentNotes || 'None specified'}\n\nAll attached telemetries and emergency contacts have been notified in this simulation.`,
+      `Category: ${selectedCategory}\nSeverity: ${severityLevel}\nTime: ${timeString}\nNotes: ${incidentNotes || 'None specified'}\n\nEmergency dispatch signal broadcasted.`,
       [{ text: 'Acknowledged' }]
     );
   };
@@ -255,7 +254,7 @@ export default function EmergencyScreen() {
         {/* SECTION 2: EMERGENCY CONTACT                                 */}
         {/* ============================================================ */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>2. Emergency Contact (ICE & Dispatch)</Text>
+          <Text style={styles.sectionHeader}>2. Emergency Contact</Text>
           <EmergencyContact
             name="Maria Dela Cruz (ICE Contact)"
             relationship="Parent / Next of Kin"
@@ -279,72 +278,88 @@ export default function EmergencyScreen() {
 
         {/* ============================================================ */}
         {/* SECTION 3: CURRENT LOCATION                                  */}
-        {/* // MEMBER 2 - LOCATION FEATURE (components/LocationCard.jsx)  */}
+        {/* // MEMBER 2 - LOCATION FEATURE                               */}
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>3. Current Location</Text>
-          {/* MEMBER 2 - LOCATION COMPONENT INTEGRATION */}
-          <LocationCard
-            latitude={10.3157}
-            longitude={123.8854}
-            accuracy="±3m (Simulated)"
-            status="GPS Active / Tracking"
+          {/* 
+            MEMBER 2 INTEGRATION POINT:
+            When Member 2 completes their feature, import LocationCard:
+            import LocationCard from "../components/LocationCard";
+            <LocationCard />
+          */}
+          <StatusCard
+            title="GPS Telemetry (LocationCard Integration Area)"
+            value="10.3157° N, 123.8854° E (Placeholder)"
+            statusType="info"
+            icon="📍"
+            badge="MEMBER 2 AREA"
+            description="Integration point for Member 2 LocationCard component and services/location.js."
           />
         </View>
 
         {/* ============================================================ */}
         {/* SECTION 4: PHOTO EVIDENCE                                    */}
         {/* // MEMBER 3 - CAMERA / PHOTO EVIDENCE FEATURE                */}
-        {/* // (components/EvidenceCard.jsx)                             */}
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>4. Photo Evidence</Text>
-          {/* MEMBER 3 - CAMERA / PHOTO EVIDENCE INTEGRATION */}
-          <EvidenceCard
-            hasPhoto={false}
-            onCapturePress={() =>
-              Alert.alert(
-                'Camera Action (Member 3)',
-                'Member 3 will handle native camera permissions and photo capture in services/camera.js.'
-              )
-            }
+          {/* 
+            MEMBER 3 INTEGRATION POINT:
+            When Member 3 completes their feature, import EvidenceCard:
+            import EvidenceCard from "../components/EvidenceCard";
+            <EvidenceCard />
+          */}
+          <StatusCard
+            title="Visual Evidence (EvidenceCard Integration Area)"
+            value="No Photo Attached (Placeholder)"
+            statusType="warning"
+            icon="📷"
+            badge="MEMBER 3 AREA"
+            description="Integration point for Member 3 EvidenceCard component and services/camera.js."
           />
         </View>
 
         {/* ============================================================ */}
         {/* SECTION 5: SENSOR INFORMATION                                */}
-        {/* // MEMBER 4 - SENSOR FEATURE (components/SensorDisplay.jsx)   */}
+        {/* // MEMBER 4 - SENSOR FEATURE                                 */}
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>5. Sensor Information</Text>
-          {/* MEMBER 4 - SENSOR INTEGRATION */}
-          <SensorDisplay
-            sensorStatus="Accelerometer Active"
-            impactDetected="No Severe Fall / Impact"
-            shakeCount={0}
-            savedReportsCount={1}
+          {/* 
+            MEMBER 4 INTEGRATION POINT:
+            When Member 4 completes their feature, import SensorDisplay:
+            import SensorDisplay from "../components/SensorDisplay";
+            <SensorDisplay />
+          */}
+          <StatusCard
+            title="Sensor Telemetry (SensorDisplay Integration Area)"
+            value="Sensors Nominal (Placeholder)"
+            statusType="info"
+            icon="⚡"
+            badge="MEMBER 4 AREA"
+            description="Integration point for Member 4 SensorDisplay component and services/sensor.js."
           />
         </View>
 
         {/* ============================================================ */}
         {/* SECTION 6: SAVED EMERGENCY INFORMATION                       */}
-        {/* // MEMBER 4 - STORAGE FEATURE (services/storage.js)          */}
+        {/* // MEMBER 4 - STORAGE FEATURE                                */}
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>6. Saved Emergency Information</Text>
+          {/* 
+            MEMBER 4 STORAGE INTEGRATION POINT:
+            When Member 4 completes their feature, integrate services/storage.js:
+            import { getEmergencyData, saveEmergencyData } from "../services/storage";
+          */}
           <StatusCard
-            title="Local Offline Storage"
-            value="1 Offline Emergency Log Saved"
-            statusType="info"
+            title="Offline Incident Storage"
+            value="Local Storage Ready (Placeholder)"
+            statusType="safe"
             icon="💾"
-            badge="MEMBER 4 STORAGE"
-            description="Emergency reports and telemetry logs are archived locally via services/storage.js."
-            onPress={() =>
-              Alert.alert(
-                'Offline Storage (Member 4)',
-                'Member 4 will handle persistent local storage in services/storage.js.'
-              )
-            }
+            badge="MEMBER 4 AREA"
+            description="Integration point for Member 4 local offline persistent storage via services/storage.js."
           />
         </View>
 
