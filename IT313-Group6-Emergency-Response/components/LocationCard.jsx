@@ -23,7 +23,7 @@
  *     3. Location cannot be obtained ("Location cannot be obtained...")
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -38,6 +38,7 @@ export default function LocationCard({
   longitude,
   loading = false,
   errorMessage = null,
+  autoFetch = true,
   onLocationUpdate,
 }) {
   // Internal state when component manages its own location fetch
@@ -72,6 +73,13 @@ export default function LocationCard({
 
     setInternalLoading(false);
   };
+
+  // Auto-fetch GPS coordinates on mount if coordinates not provided
+  useEffect(() => {
+    if (autoFetch && latitude === undefined && longitude === undefined) {
+      handleFetchLocation();
+    }
+  }, [autoFetch, latitude, longitude]);
 
   const hasCoords =
     effectiveLat !== undefined &&

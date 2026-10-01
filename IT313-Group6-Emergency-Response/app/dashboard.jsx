@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import EmergencyButton from '../components/EmergencyButton';
 import StatusCard from '../components/StatusCard';
 import EmergencyContact from '../components/EmergencyContact';
+import LocationCard from '../components/LocationCard';
 
 /**
  * ============================================================================
@@ -216,23 +217,10 @@ export default function DashboardScreen() {
           />
         </View>
 
-        {/* Current Location Preview (Member 2 Placeholder) */}
+        {/* Current Location (Member 2 GPS Integration) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Current Location Preview</Text>
-          <StatusCard
-            title="GPS Telemetry (Preview)"
-            value={locationPreview}
-            statusType="info"
-            icon="📍"
-            badge="MEMBER 2 AREA"
-            description="Hardware location coordinates will be provided by Member 2."
-            onPress={() =>
-              Alert.alert(
-                'Location Feature',
-                'Native GPS location tracking is managed by Member 2 in services/location.js.'
-              )
-            }
-          />
+          <LocationCard />
         </View>
 
         {/* Quick Access Hotlines Directory */}

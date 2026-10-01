@@ -21,7 +21,7 @@ import EmergencyContact from '../components/EmergencyContact';
 // ============================================================================
 // FUTURE MEMBER INTEGRATION IMPORTS (Uncomment upon merging Members 2-4 branches)
 // ============================================================================
-// import LocationCard from '../components/LocationCard';    // MEMBER 2 - LOCATION
+import LocationCard from '../components/LocationCard';    // MEMBER 2 - LOCATION
 // import EvidenceCard from '../components/EvidenceCard';    // MEMBER 3 - CAMERA / PHOTO EVIDENCE
 // import SensorDisplay from '../components/SensorDisplay';  // MEMBER 4 - SENSOR / STORAGE
 
@@ -282,20 +282,7 @@ export default function EmergencyScreen() {
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>3. Current Location</Text>
-          {/* 
-            MEMBER 2 INTEGRATION POINT:
-            When Member 2 completes their feature, import LocationCard:
-            import LocationCard from "../components/LocationCard";
-            <LocationCard />
-          */}
-          <StatusCard
-            title="GPS Telemetry (LocationCard Integration Area)"
-            value="10.3157° N, 123.8854° E (Placeholder)"
-            statusType="info"
-            icon="📍"
-            badge="MEMBER 2 AREA"
-            description="Integration point for Member 2 LocationCard component and services/location.js."
-          />
+          <LocationCard />
         </View>
 
         {/* ============================================================ */}
