@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -19,11 +19,16 @@ import StatusCard from '../components/StatusCard';
 import EmergencyContact from '../components/EmergencyContact';
 
 // ============================================================================
-// FUTURE MEMBER INTEGRATION IMPORTS (Uncomment upon merging Members 2-4 branches)
+// MEMBER INTEGRATION IMPORTS
 // ============================================================================
 // import LocationCard from '../components/LocationCard';    // MEMBER 2 - LOCATION
 // import EvidenceCard from '../components/EvidenceCard';    // MEMBER 3 - CAMERA / PHOTO EVIDENCE
-// import SensorDisplay from '../components/SensorDisplay';  // MEMBER 4 - SENSOR / STORAGE
+import SensorDisplay from '../components/SensorDisplay';     // MEMBER 4 - SENSOR
+import {
+  clearEmergencyInformation,
+  getEmergencyInformation,
+  saveEmergencyInformation,
+} from '../services/storage';                                // MEMBER 4 - STORAGE
 
 /**
  * ============================================================================
@@ -100,6 +105,86 @@ export default function EmergencyScreen() {
 
   const handleCallDispatcher = (contactName, phone) => {
     Alert.alert('Emergency Call', `Initiating call to ${contactName} (${phone}).`);
+  };
+
+  // ----------------------------------------------------
+  // Member 4 - Local Emergency Information Storage Handlers
+  // ----------------------------------------------------
+  const [savedEmergencyData, setSavedEmergencyData] = useState(null);
+  const [storageStatusMessage, setStorageStatusMessage] = useState('No saved records yet.');
+
+  // Load existing saved emergency information on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getEmergencyInformation();
+        if (res.success && res.data) {
+          setSavedEmergencyData(res.data);
+          setStorageStatusMessage(`Loaded: ${res.data.category || 'Incident'} (${res.data.timestamp || 'Recorded'})`);
+        }
+      } catch (err) {
+        console.warn('Storage initial load error:', err);
+      }
+    })();
+  }, []);
+
+  const handleSaveToStorage = async () => {
+    const payload = {
+      category: selectedCategory,
+      severity: severityLevel,
+      notes: incidentNotes || 'No notes specified',
+      timestamp: new Date().toLocaleTimeString(),
+      date: new Date().toLocaleDateString(),
+    };
+
+    const res = await saveEmergencyInformation(payload);
+    if (res.success) {
+      setSavedEmergencyData(payload);
+      setStorageStatusMessage(`Saved: ${payload.category} (${payload.timestamp})`);
+      Alert.alert(
+        '💾 Local Storage Saved',
+        `Offline emergency information saved successfully to device storage!\n\nCategory: ${payload.category}\nSeverity: ${payload.severity}\nTime: ${payload.timestamp}\nNotes: ${payload.notes}`,
+        [{ text: 'OK' }]
+      );
+    } else {
+      Alert.alert('Storage Error', res.error || 'Failed to save emergency data.');
+    }
+  };
+
+  const handleRetrieveFromStorage = async () => {
+    const res = await getEmergencyInformation();
+    if (res.success && res.data) {
+      setSavedEmergencyData(res.data);
+      Alert.alert(
+        '📂 Stored Emergency Record',
+        `Category: ${res.data.category}\nSeverity: ${res.data.severity}\nNotes: ${res.data.notes}\nSaved At: ${res.data.timestamp} (${res.data.date || 'Today'})`,
+        [{ text: 'Done' }]
+      );
+    } else {
+      Alert.alert('Offline Storage', 'No saved emergency records found on device.');
+    }
+  };
+
+  const handleClearStorage = async () => {
+    Alert.alert(
+      'Clear Stored Data',
+      'Are you sure you want to remove the saved emergency information from device storage?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Data',
+          style: 'destructive',
+          onPress: async () => {
+            const res = await clearEmergencyInformation();
+            if (res.success) {
+              setSavedEmergencyData(null);
+              setStorageStatusMessage('No saved records yet.');
+              Alert.alert('Storage Cleared', 'Local emergency information has been removed.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -326,20 +411,7 @@ export default function EmergencyScreen() {
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>5. Sensor Information</Text>
-          {/* 
-            MEMBER 4 INTEGRATION POINT:
-            When Member 4 completes their feature, import SensorDisplay:
-            import SensorDisplay from "../components/SensorDisplay";
-            <SensorDisplay />
-          */}
-          <StatusCard
-            title="Sensor Telemetry (SensorDisplay Integration Area)"
-            value="Sensors Nominal (Placeholder)"
-            statusType="info"
-            icon="⚡"
-            badge="MEMBER 4 AREA"
-            description="Integration point for Member 4 SensorDisplay component and services/sensor.js."
-          />
+          <SensorDisplay />
         </View>
 
         {/* ============================================================ */}
@@ -348,19 +420,77 @@ export default function EmergencyScreen() {
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>6. Saved Emergency Information</Text>
-          {/* 
-            MEMBER 4 STORAGE INTEGRATION POINT:
-            When Member 4 completes their feature, integrate services/storage.js:
-            import { getEmergencyData, saveEmergencyData } from "../services/storage";
-          */}
-          <StatusCard
-            title="Offline Incident Storage"
-            value="Local Storage Ready (Placeholder)"
-            statusType="safe"
-            icon="💾"
-            badge="MEMBER 4 AREA"
-            description="Integration point for Member 4 local offline persistent storage via services/storage.js."
-          />
+          <View style={styles.storageCard}>
+            <View style={styles.storageHeaderRow}>
+              <View style={styles.storageTitleRow}>
+                <Text style={styles.storageIcon}>💾</Text>
+                <Text style={styles.storageTitle}>Offline Incident Storage</Text>
+              </View>
+              <View
+                style={[
+                  styles.storageBadge,
+                  savedEmergencyData ? styles.storageBadgeActive : styles.storageBadgeEmpty,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.storageBadgeText,
+                    savedEmergencyData ? styles.storageBadgeTextActive : styles.storageBadgeTextEmpty,
+                  ]}
+                >
+                  {savedEmergencyData ? 'DATA STORED' : 'NO DATA'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.storageDataBox}>
+              <Text style={styles.storageDataLabel}>Storage Status:</Text>
+              <Text style={styles.storageDataText}>{storageStatusMessage}</Text>
+              {savedEmergencyData ? (
+                <View style={styles.storageRecordDetails}>
+                  <Text style={styles.storageDetailText}>
+                    • Category: {savedEmergencyData.category}
+                  </Text>
+                  <Text style={styles.storageDetailText}>
+                    • Severity: {savedEmergencyData.severity}
+                  </Text>
+                  <Text style={styles.storageDetailText} numberOfLines={2}>
+                    • Notes: {savedEmergencyData.notes}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Clickable Actions */}
+            <View style={styles.storageBtnRow}>
+              <TouchableOpacity
+                style={[styles.storageActionBtn, styles.storageSaveBtn]}
+                onPress={handleSaveToStorage}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.storageBtnIcon}>💾</Text>
+                <Text style={styles.storageSaveBtnText}>Save Info</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.storageActionBtn, styles.storageLoadBtn]}
+                onPress={handleRetrieveFromStorage}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.storageBtnIcon}>📂</Text>
+                <Text style={styles.storageLoadBtnText}>Retrieve</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.storageActionBtn, styles.storageClearBtn]}
+                onPress={handleClearStorage}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.storageBtnIcon}>🗑️</Text>
+                <Text style={styles.storageClearBtnText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Safety Instructions Card */}
@@ -549,5 +679,140 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1E3A8A',
     lineHeight: 18,
+  },
+  // Member 4 - Storage Card Styles
+  storageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    marginVertical: 6,
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    borderLeftWidth: 5,
+    borderLeftColor: '#16A34A',
+    shadowColor: '#16A34A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  storageHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#DCFCE7',
+    paddingBottom: 8,
+  },
+  storageTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  storageIcon: {
+    fontSize: 18,
+    marginRight: 6,
+  },
+  storageTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#14532D',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  storageBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  storageBadgeActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  storageBadgeEmpty: {
+    backgroundColor: '#F1F5F9',
+  },
+  storageBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  storageBadgeTextActive: {
+    color: '#16A34A',
+  },
+  storageBadgeTextEmpty: {
+    color: '#64748B',
+  },
+  storageDataBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  storageDataLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
+  storageDataText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#14532D',
+  },
+  storageRecordDetails: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#BBF7D0',
+  },
+  storageDetailText: {
+    fontSize: 12,
+    color: '#15803D',
+    marginVertical: 1,
+  },
+  storageBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  storageActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  storageSaveBtn: {
+    backgroundColor: '#16A34A',
+  },
+  storageLoadBtn: {
+    backgroundColor: '#2563EB',
+  },
+  storageClearBtn: {
+    backgroundColor: '#EF4444',
+  },
+  storageBtnIcon: {
+    fontSize: 13,
+    marginRight: 4,
+  },
+  storageSaveBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  storageLoadBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  storageClearBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

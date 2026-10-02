@@ -10,6 +10,7 @@ import {
 import {
   DEFAULT_SENSOR_INTERVAL_MS,
   SENSOR_TYPE_NAME,
+  analyzeSensorReading,
   checkSensorAvailability,
   formatSensorValue,
   subscribeToSensor,
@@ -150,6 +151,23 @@ export default function SensorDisplay({
     }
   };
 
+  // Web / Simulation fallback handler (useful for testing when hardware sensor is absent)
+  const [simIndex, setSimIndex] = useState(0);
+  const handleSimulateReading = () => {
+    const samples = [
+      { x: 0.05, y: 0.98, z: 0.12, label: 'Stationary / Normal (~1.0G)' },
+      { x: 0.85, y: 1.15, z: 0.70, label: 'Active Movement (~1.6G)' },
+      { x: 1.95, y: 1.65, z: 1.30, label: 'High Impact / Fall (~2.8G)' },
+    ];
+    const sample = samples[simIndex % samples.length];
+    setSimIndex((prev) => prev + 1);
+
+    const { magnitude, status, isImpact: impactFlag } = analyzeSensorReading(sample.x, sample.y, sample.z);
+    setInternalValue(formatSensorValue({ ...sample, magnitude }));
+    setInternalStatus(status);
+    setIsImpact(impactFlag);
+  };
+
   return (
     <View style={styles.card}>
       {/* Header Row */}
@@ -243,8 +261,15 @@ export default function SensorDisplay({
         <View style={[styles.stateNotice, styles.noticeUnavailable]}>
           <Text style={styles.noticeTitle}>⚠️ Sensor Unavailable</Text>
           <Text style={styles.noticeBody}>
-            The accelerometer is not accessible on this platform/device. In simulators or web browsers, sensor hardware is simulated or restricted.
+            The accelerometer is not accessible on this platform/device. In simulators or desktop web browsers, sensor hardware is restricted.
           </Text>
+          <TouchableOpacity
+            style={styles.simBtn}
+            onPress={handleSimulateReading}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.simBtnText}>🧪 Test / Simulate Motion Event</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -473,5 +498,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#7C3AED',
+  },
+  simBtn: {
+    marginTop: 8,
+    backgroundColor: '#D97706',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  simBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

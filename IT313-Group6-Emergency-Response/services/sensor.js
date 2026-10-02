@@ -21,7 +21,10 @@
  * 4. Provides a clean subscription and unsubscribe mechanism to prevent battery drain.
  */
 
-import { Accelerometer } from 'expo-sensors';
+// Direct subpath import avoids expo-sensors/index.js loading Pedometer,
+// which crashes the Metro web bundler in Expo 52 (ExponentPedometer native module).
+// expo-sensors/build/Accelerometer works correctly on mobile and web.
+import Accelerometer from 'expo-sensors/build/Accelerometer';
 
 /**
  * Default sensor update interval in milliseconds (500ms provides smooth UI without CPU overload)
