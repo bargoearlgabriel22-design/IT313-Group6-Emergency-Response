@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   SafeAreaView,
@@ -18,6 +18,13 @@ import EmergencyContact from '../components/EmergencyContact';
 // Member 3 - Camera / Photo Evidence Component
 import EvidenceCard from '../components/EvidenceCard';
 
+// Member 3 - Local Storage Service
+import {
+  saveEmergencyInfo,
+  getEmergencyInfo,
+  clearEmergencyInfo,
+} from '../services/storage';
+
 /**
  * Emergency Screen (app/emergency.jsx)
  * 
@@ -35,6 +42,60 @@ export default function EmergencyScreen() {
 
   // Member 3 - Camera / Photo Evidence State
   const [photoUri, setPhotoUri] = useState(null);
+
+  // Member 3 - Local Storage State
+  const [savedInfo, setSavedInfo] = useState(null);
+  const [storageLoading, setStorageLoading] = useState(true);
+  const [storageError, setStorageError] = useState(null);
+  const [savingInfo, setSavingInfo] = useState(false);
+
+  // Load saved emergency info when the screen mounts
+  useEffect(() => {
+    (async () => {
+      const result = await getEmergencyInfo();
+      setStorageLoading(false);
+      if (result.success) {
+        setSavedInfo(result.data);
+      } else {
+        setStorageError(result.error);
+      }
+    })();
+  }, []);
+
+  // Member 3 - Save demo emergency info to storage
+  const handleSaveEmergencyInfo = async () => {
+    setSavingInfo(true);
+    setStorageError(null);
+    const demoInfo = {
+      name: 'Emergency Responder',
+      contactNumber: '911',
+      address: 'Current Location',
+      bloodType: 'O+',
+      allergies: 'None',
+      notes: 'Community emergency response active.',
+      savedAt: new Date().toISOString(),
+    };
+    const result = await saveEmergencyInfo(demoInfo);
+    setSavingInfo(false);
+    if (result.success) {
+      setSavedInfo(demoInfo);
+      Alert.alert('✅ Saved', 'Emergency information saved to device storage.');
+    } else {
+      setStorageError(result.error);
+      Alert.alert('❌ Error', result.error || 'Failed to save emergency information.');
+    }
+  };
+
+  // Member 3 - Clear saved info from storage
+  const handleClearEmergencyInfo = async () => {
+    const result = await clearEmergencyInfo();
+    if (result.success) {
+      setSavedInfo(null);
+      Alert.alert('🗑️ Cleared', 'Emergency information removed from device storage.');
+    } else {
+      setStorageError(result.error);
+    }
+  };
 
   const handleBroadcastAlert = () => {
     setIsAlertActive(true);
@@ -169,27 +230,103 @@ export default function EmergencyScreen() {
         </View>
 
         {/* ============================================================ */}
-        {/* 6. STORAGE FEATURE                                            */}
+        {/* 6. STORAGE FEATURE — Member 3 (storage.js integrated)         */}
         {/* ============================================================ */}
-        {/* STORAGE: Replace this placeholder with storage.js data hook   */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Saved Emergency Information</Text>
-          <View style={styles.integrationCard}>
-            <View style={styles.cardHeader}>
+          <View style={styles.storageCard}>
+
+            {/* Header */}
+            <View style={styles.storageHeader}>
               <Text style={styles.cardIcon}>💾</Text>
-              <Text style={styles.cardTitle}>Saved Emergency Data</Text>
-              <View style={styles.memberBadge}>
+              <Text style={styles.cardTitle}>Emergency Data (storage.js)</Text>
+              <View style={[styles.memberBadge, styles.storageBadge]}>
                 <Text style={styles.memberBadgeText}>STORAGE</Text>
               </View>
             </View>
-            <Text style={styles.placeholderValue}>
-              [ Storage Placeholder ]
-            </Text>
-            <Text style={styles.placeholderNotes}>
-              Integration Point: Connect AsyncStorage / SecureStore / storage.js here.
-            </Text>
+
+            {/* Loading state */}
+            {storageLoading ? (
+              <Text style={styles.storageStatus}>⏳ Loading saved data…</Text>
+            ) : null}
+
+            {/* Storage error */}
+            {!storageLoading && storageError ? (
+              <Text style={styles.storageErrorText}>⚠️ {storageError}</Text>
+            ) : null}
+
+            {/* No data yet */}
+            {!storageLoading && !storageError && !savedInfo ? (
+              <View style={styles.storageEmptyBox}>
+                <Text style={styles.storageEmptyIcon}>📋</Text>
+                <Text style={styles.storageEmptyTitle}>No Data Saved Yet</Text>
+                <Text style={styles.storageEmptyNote}>
+                  Tap "Save" to store emergency information locally on this device.
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Saved data display */}
+            {!storageLoading && savedInfo ? (
+              <View style={styles.storageDataBox}>
+                <View style={styles.storageDataRow}>
+                  <Text style={styles.storageDataLabel}>👤 Name</Text>
+                  <Text style={styles.storageDataValue}>{savedInfo.name}</Text>
+                </View>
+                <View style={styles.storageDataRow}>
+                  <Text style={styles.storageDataLabel}>📞 Contact</Text>
+                  <Text style={styles.storageDataValue}>{savedInfo.contactNumber}</Text>
+                </View>
+                <View style={styles.storageDataRow}>
+                  <Text style={styles.storageDataLabel}>🩸 Blood Type</Text>
+                  <Text style={styles.storageDataValue}>{savedInfo.bloodType}</Text>
+                </View>
+                <View style={styles.storageDataRow}>
+                  <Text style={styles.storageDataLabel}>📍 Address</Text>
+                  <Text style={styles.storageDataValue}>{savedInfo.address}</Text>
+                </View>
+                {savedInfo.notes ? (
+                  <View style={styles.storageDataRow}>
+                    <Text style={styles.storageDataLabel}>📝 Notes</Text>
+                    <Text style={styles.storageDataValue}>{savedInfo.notes}</Text>
+                  </View>
+                ) : null}
+                {savedInfo.savedAt ? (
+                  <Text style={styles.storageSavedAt}>
+                    ✅ Saved: {new Date(savedInfo.savedAt).toLocaleString()}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Action Buttons */}
+            {!storageLoading ? (
+              <View style={styles.storageActionRow}>
+                <TouchableOpacity
+                  style={[styles.storageBtn, styles.storageSaveBtn, savingInfo && styles.storageBtnDisabled]}
+                  onPress={handleSaveEmergencyInfo}
+                  disabled={savingInfo}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.storageSaveBtnText}>
+                    {savingInfo ? '⏳ Saving…' : '💾 Save Info'}
+                  </Text>
+                </TouchableOpacity>
+                {savedInfo ? (
+                  <TouchableOpacity
+                    style={[styles.storageBtn, styles.storageClearBtn]}
+                    onPress={handleClearEmergencyInfo}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.storageClearBtnText}>🗑️ Clear</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
+
           </View>
         </View>
+
 
         {/* Primary Action Button */}
         <View style={styles.actionSection}>
@@ -331,5 +468,125 @@ const styles = StyleSheet.create({
   },
   actionSection: {
     marginVertical: 10,
+  },
+
+  // ── Member 3 Storage Card ──
+  storageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  storageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  storageBadge: {
+    backgroundColor: '#ECFDF5',
+  },
+  storageStatus: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  storageErrorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  storageEmptyBox: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    marginBottom: 12,
+  },
+  storageEmptyIcon: { fontSize: 28, marginBottom: 4 },
+  storageEmptyTitle: { fontSize: 14, fontWeight: '700', color: '#1E293B', marginBottom: 2 },
+  storageEmptyNote: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    lineHeight: 16,
+  },
+  storageDataBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  storageDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  storageDataLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+    flex: 1,
+  },
+  storageDataValue: {
+    fontSize: 12,
+    color: '#0F172A',
+    fontWeight: '500',
+    flex: 1,
+    textAlign: 'right',
+  },
+  storageSavedAt: {
+    fontSize: 10,
+    color: '#166534',
+    marginTop: 8,
+    textAlign: 'right',
+  },
+  storageActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  storageBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  storageSaveBtn: {
+    backgroundColor: '#0F172A',
+  },
+  storageSaveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  storageBtnDisabled: {
+    backgroundColor: '#94A3B8',
+  },
+  storageClearBtn: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  storageClearBtnText: {
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
