@@ -15,6 +15,9 @@ import EmergencyButton from '../components/EmergencyButton';
 import StatusCard from '../components/StatusCard';
 import EmergencyContact from '../components/EmergencyContact';
 
+// Member 3 - Camera / Photo Evidence Component
+import EvidenceCard from '../components/EvidenceCard';
+
 /**
  * Emergency Screen (app/emergency.jsx)
  * 
@@ -29,6 +32,9 @@ export default function EmergencyScreen() {
   // ----------------------------------------------------
   const [isAlertActive, setIsAlertActive] = useState(false);
   const [alertType, setAlertType] = useState('CRITICAL');
+
+  // Member 3 - Camera / Photo Evidence State
+  const [photoUri, setPhotoUri] = useState(null);
 
   const handleBroadcastAlert = () => {
     setIsAlertActive(true);
@@ -126,24 +132,17 @@ export default function EmergencyScreen() {
         {/* ============================================================ */}
         {/* 4. MEMBER 3 - CAMERA / EVIDENCE FEATURE                       */}
         {/* ============================================================ */}
-        {/* MEMBER 3: Replace this placeholder with <EvidenceCard />      */}
+        {/* MEMBER 3: EvidenceCard integrated — camera.js + EvidenceCard  */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Photo Evidence (Member 3)</Text>
-          <View style={styles.integrationCard}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardIcon}>📷</Text>
-              <Text style={styles.cardTitle}>Photo Evidence</Text>
-              <View style={styles.memberBadge}>
-                <Text style={styles.memberBadgeText}>MEMBER 3</Text>
-              </View>
-            </View>
-            <Text style={styles.placeholderValue}>
-              [ Member 3 - Camera Placeholder ]
-            </Text>
-            <Text style={styles.placeholderNotes}>
-              Integration Point: Connect Camera API / EvidenceCard / camera.js here.
-            </Text>
-          </View>
+          <EvidenceCard
+            imageUri={photoUri}
+            onCapture={(uri) => setPhotoUri(uri)}
+            onRemove={() => setPhotoUri(null)}
+            title="Photo Evidence"
+            subtitle="Capture incident scene for emergency responders"
+            allowLibrary={true}
+          />
         </View>
 
         {/* ============================================================ */}

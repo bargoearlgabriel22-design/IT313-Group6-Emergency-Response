@@ -25,7 +25,15 @@
     "plugins": [
       "expo-router",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Community Emergency Response Assistant to access your camera to capture photo evidence.",
+          "microphonePermission": false,
+          "photosPermission": "Allow Community Emergency Response Assistant to access your photo library."
+        }
+      ]
     ]
   }
 }
