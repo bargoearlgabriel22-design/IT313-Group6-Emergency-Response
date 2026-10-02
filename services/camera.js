@@ -1,35 +1,26 @@
 /**
  * Camera Service (services/camera.js)
- * 
+ *
  * Member 3 Responsibility: Camera & Photo Evidence Feature
  * Community Emergency Response Assistant
- * 
+ *
  * Architecture Flow:
  * EvidenceCard (UI Component)
  *      ↓
  * services/camera.js (Camera Service Layer)
  *      ↓
- * Expo Camera API (expo-image-picker / Device Hardware)
- *      ↓
- * Device Camera
- * 
- * Key Responsibilities:
- * 1. Check camera permission without crashing.
- * 2. Request camera permission when needed.
- * 3. Handle granted permissions seamlessly.
- * 4. Handle denied permissions gracefully (returns user-friendly error).
- * 5. Trigger device camera to capture photo evidence.
- * 6. Return captured photo URI to UI.
- * 7. Provide fallback image library selection for testing/emulators.
+ * Mobile:  expo-image-picker → launchCameraAsync → Device Native Camera
+ * Web:     Browser MediaDevices API → getUserMedia → Webcam Feed → Canvas Capture
  */
 
 import * as ImagePicker from 'expo-image-picker';
 
+// ============================================================
+// MOBILE CAMERA FUNCTIONS (Android / iOS — Expo Go)
+// ============================================================
+
 /**
- * Checks the device's current camera permission status.
- * Does not prompt the user.
- * 
- * @returns {Promise<{ granted: boolean, status: string, canAskAgain: boolean, error?: string }>}
+ * Checks the current camera permission status on mobile.
  */
 export async function checkCameraPermission() {
   try {
@@ -50,9 +41,7 @@ export async function checkCameraPermission() {
 }
 
 /**
- * Requests camera permission from the device/user.
- * 
- * @returns {Promise<{ granted: boolean, status: string, canAskAgain: boolean, error?: string }>}
+ * Requests camera permission from the device user on mobile.
  */
 export async function requestCameraPermission() {
   try {
@@ -73,29 +62,15 @@ export async function requestCameraPermission() {
 }
 
 /**
- * Captures photo evidence using the device camera.
- * 
- * Flow:
- * 1. Check camera permission.
- * 2. Request permission if not already granted.
- * 3. If denied, return a graceful error response (never throw/crash).
- * 4. If granted, launch the device camera.
- * 5. Return the captured photo URI to the UI layer.
- * 
- * @param {object} customOptions - Optional custom ImagePicker configuration options
- * @returns {Promise<{ success: boolean, uri?: string, asset?: object, canceled?: boolean, permissionDenied?: boolean, error?: string }>}
+ * Captures photo on MOBILE using the native camera.
+ * Checks → requests → launches camera → returns URI.
  */
 export async function capturePhoto(customOptions = {}) {
   try {
-    // Step 1: Check existing camera permission
     let permission = await checkCameraPermission();
-
-    // Step 2: Request permission if not granted yet
     if (!permission.granted) {
       permission = await requestCameraPermission();
     }
-
-    // Step 3: Handle denied permission gracefully
     if (!permission.granted) {
       return {
         success: false,
@@ -106,7 +81,6 @@ export async function capturePhoto(customOptions = {}) {
       };
     }
 
-    // Step 4: Permission granted - Launch device camera
     const options = {
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -117,25 +91,15 @@ export async function capturePhoto(customOptions = {}) {
 
     const result = await ImagePicker.launchCameraAsync(options);
 
-    // Step 5: Handle user cancellation (dismissed camera UI without capturing)
     if (result.canceled) {
-      return {
-        success: false,
-        canceled: true,
-        uri: null,
-      };
+      return { success: false, canceled: true, uri: null };
     }
 
-    // Step 6: Extract and return the captured photo URI
     const capturedUri =
       result.assets && result.assets.length > 0 ? result.assets[0].uri : null;
 
     if (!capturedUri) {
-      return {
-        success: false,
-        canceled: false,
-        error: 'No image URI returned from camera.',
-      };
+      return { success: false, canceled: false, error: 'No image URI returned from camera.' };
     }
 
     return {
@@ -145,7 +109,6 @@ export async function capturePhoto(customOptions = {}) {
       asset: result.assets[0],
     };
   } catch (error) {
-    // Fail-safe: Always catch errors to prevent application crashes
     return {
       success: false,
       canceled: false,
@@ -157,12 +120,7 @@ export async function capturePhoto(customOptions = {}) {
 }
 
 /**
- * Selects an existing photo from the device image library.
- * Provides a reliable fallback for testing environments and emulators
- * that lack active camera hardware.
- * 
- * @param {object} customOptions - Optional custom ImagePicker configuration options
- * @returns {Promise<{ success: boolean, uri?: string, asset?: object, canceled?: boolean, permissionDenied?: boolean, error?: string }>}
+ * Selects a photo from the mobile device's image library (gallery fallback).
  */
 export async function pickImageFromLibrary(customOptions = {}) {
   try {
@@ -190,11 +148,7 @@ export async function pickImageFromLibrary(customOptions = {}) {
     const result = await ImagePicker.launchImageLibraryAsync(options);
 
     if (result.canceled) {
-      return {
-        success: false,
-        canceled: true,
-        uri: null,
-      };
+      return { success: false, canceled: true, uri: null };
     }
 
     const selectedUri =
@@ -214,5 +168,103 @@ export async function pickImageFromLibrary(customOptions = {}) {
         error?.message ||
         'An unexpected error occurred while accessing the photo library.',
     };
+  }
+}
+
+// ============================================================
+// WEB CAMERA FUNCTIONS (Desktop / Mobile Browser via getUserMedia)
+// ============================================================
+
+/**
+ * Starts the webcam using the browser's MediaDevices API.
+ * This is the correct method for web — opens actual live camera,
+ * not a file folder browser.
+ *
+ * @returns {Promise<{ success: boolean, stream?: MediaStream, error?: string, permissionDenied?: boolean }>}
+ */
+export async function startWebCameraStream() {
+  if (
+    typeof navigator === 'undefined' ||
+    !navigator.mediaDevices ||
+    !navigator.mediaDevices.getUserMedia
+  ) {
+    return {
+      success: false,
+      error: 'Camera API is not available in this browser. Try Chrome or Firefox.',
+    };
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' }, // prefer rear camera on phones
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+    return { success: true, stream };
+  } catch (error) {
+    if (
+      error.name === 'NotAllowedError' ||
+      error.name === 'PermissionDeniedError'
+    ) {
+      return {
+        success: false,
+        permissionDenied: true,
+        error:
+          'Camera permission was denied by the browser. Click the camera icon in your address bar to allow access, then try again.',
+      };
+    }
+    if (
+      error.name === 'NotFoundError' ||
+      error.name === 'DevicesNotFoundError'
+    ) {
+      return {
+        success: false,
+        error: 'No camera was found on this device.',
+      };
+    }
+    return {
+      success: false,
+      error: error.message || 'Failed to access the camera.',
+    };
+  }
+}
+
+/**
+ * Captures a still photo from a live <video> element using an HTML canvas.
+ *
+ * @param {HTMLVideoElement} videoElement
+ * @returns {{ success: boolean, uri?: string, error?: string }}
+ */
+export function captureFrameFromVideo(videoElement) {
+  try {
+    if (!videoElement) {
+      return { success: false, error: 'No video element available to capture.' };
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth || 640;
+    canvas.height = videoElement.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+    const uri = canvas.toDataURL('image/jpeg', 0.85);
+    return { success: true, uri };
+  } catch (error) {
+    return {
+      success: false,
+      error: error?.message || 'Failed to capture photo from camera feed.',
+    };
+  }
+}
+
+/**
+ * Stops all tracks in a MediaStream, releasing the camera hardware.
+ *
+ * @param {MediaStream} stream
+ */
+export function stopWebCameraStream(stream) {
+  if (stream) {
+    stream.getTracks().forEach((track) => track.stop());
   }
 }
