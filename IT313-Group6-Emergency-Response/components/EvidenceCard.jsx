@@ -102,13 +102,18 @@ export default function EvidenceCard({
 
   // ── Core: persist image to permanent storage ────────────────────
   async function _persistImage(tempUri) {
-    setLoadingMessage('Saving image permanently…');
-    const saveResult = await saveEvidenceImage(tempUri, descriptionText);
-    if (!saveResult.success) {
-      setErrorMessage(saveResult.error || 'Failed to save image to device storage.');
-      return null;
+    if (!tempUri) return null;
+    try {
+      setLoadingMessage('Saving image permanently…');
+      const saveResult = await saveEvidenceImage(tempUri, descriptionText);
+      if (saveResult && saveResult.success && saveResult.evidence && saveResult.evidence.permanentUri) {
+        return saveResult.evidence.permanentUri;
+      }
+      return tempUri;
+    } catch (err) {
+      console.warn('Error persisting image:', err);
+      return tempUri;
     }
-    return saveResult.evidence.permanentUri;
   }
 
   // ── TAKE PHOTO ──────────────────────────────────────────────────
@@ -134,19 +139,23 @@ export default function EvidenceCard({
       setErrorMessage(result.error);
       return;
     }
-    if (result.canceled || !result.success) {
+    if (result.canceled || !result.success || !result.uri) {
       setLoading(false);
       if (!result.canceled) setErrorMessage(result.error || 'Camera capture failed.');
       return;
     }
 
-    // Permanently save the captured file
+    // Attach immediately so the photo is visible to the user right away!
+    setInternalUri(result.uri);
+    if (typeof onCapture === 'function') onCapture(result.uri);
+
+    // Persist permanently in background
     const permanentUri = await _persistImage(result.uri);
     setLoading(false);
-    if (!permanentUri) return;
-
-    setInternalUri(permanentUri);
-    if (typeof onCapture === 'function') onCapture(permanentUri);
+    if (permanentUri && permanentUri !== result.uri) {
+      setInternalUri(permanentUri);
+      if (typeof onCapture === 'function') onCapture(permanentUri);
+    }
   }
 
   // ── PICK FROM GALLERY ───────────────────────────────────────────
@@ -164,19 +173,25 @@ export default function EvidenceCard({
       setErrorMessage(result.error);
       return;
     }
-    if (result.canceled || !result.success) {
+    if (result.canceled || !result.success || !result.uri) {
       setLoading(false);
       if (!result.canceled) setErrorMessage(result.error || 'Gallery selection failed.');
       return;
     }
 
+    // Attach immediately so the photo is visible to the user right away!
+    setInternalUri(result.uri);
+    if (typeof onSelectImage === 'function') onSelectImage(result.uri);
+    else if (typeof onCapture === 'function') onCapture(result.uri);
+
+    // Persist permanently in background
     const permanentUri = await _persistImage(result.uri);
     setLoading(false);
-    if (!permanentUri) return;
-
-    setInternalUri(permanentUri);
-    if (typeof onSelectImage === 'function') onSelectImage(permanentUri);
-    else if (typeof onCapture === 'function') onCapture(permanentUri);
+    if (permanentUri && permanentUri !== result.uri) {
+      setInternalUri(permanentUri);
+      if (typeof onSelectImage === 'function') onSelectImage(permanentUri);
+      else if (typeof onCapture === 'function') onCapture(permanentUri);
+    }
   };
 
   // ── WEB CAMERA ─────────────────────────────────────────────────
@@ -204,21 +219,25 @@ export default function EvidenceCard({
 
   const handleWebCapture = async () => {
     const captured = captureFrameFromVideo(videoElementRef.current);
-    if (!captured.success) {
-      setErrorMessage(captured.error);
+    if (!captured.success || !captured.uri) {
+      setErrorMessage(captured.error || 'Failed to capture frame from camera.');
       return;
     }
     stopWebCameraStream(webStream);
     setWebStream(null);
     setShowWebCam(false);
 
+    // Attach immediately
+    setInternalUri(captured.uri);
+    if (typeof onCapture === 'function') onCapture(captured.uri);
+
     setLoading(true);
     const permanentUri = await _persistImage(captured.uri);
     setLoading(false);
-    if (!permanentUri) return;
-
-    setInternalUri(permanentUri);
-    if (typeof onCapture === 'function') onCapture(permanentUri);
+    if (permanentUri && permanentUri !== captured.uri) {
+      setInternalUri(permanentUri);
+      if (typeof onCapture === 'function') onCapture(permanentUri);
+    }
   };
 
   const handleWebCamClose = () => {
