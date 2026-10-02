@@ -125,9 +125,8 @@ export const subscribeToSensor = (onData, onError, intervalMs = DEFAULT_SENSOR_I
       if (!isActive) return;
 
       if (!available) {
-        if (onError) {
-          onError(new Error(error || 'Accelerometer is unavailable on this device.'));
-        }
+        // Sensor unavailable is EXPECTED on web/simulator — do not trigger onError.
+        // SensorDisplay handles unavailability separately via checkSensorAvailability().
         return;
       }
 

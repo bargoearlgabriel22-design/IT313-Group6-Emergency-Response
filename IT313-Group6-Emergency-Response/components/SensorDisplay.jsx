@@ -179,10 +179,10 @@ export default function SensorDisplay({
         <View
           style={[
             styles.statusBadge,
-            activeError
-              ? styles.badgeError
-              : activeAvailable === false
+            activeAvailable === false
               ? styles.badgeUnavailable
+              : activeError
+              ? styles.badgeError
               : isImpact
               ? styles.badgeImpact
               : styles.badgeActive,
@@ -191,19 +191,19 @@ export default function SensorDisplay({
           <Text
             style={[
               styles.badgeText,
-              activeError
-                ? styles.badgeTextError
-                : activeAvailable === false
+              activeAvailable === false
                 ? styles.badgeTextUnavailable
+                : activeError
+                ? styles.badgeTextError
                 : isImpact
                 ? styles.badgeTextImpact
                 : styles.badgeTextActive,
             ]}
           >
-            {activeError
-              ? 'ERROR'
-              : activeAvailable === false
+            {activeAvailable === false
               ? 'UNAVAILABLE'
+              : activeError
+              ? 'ERROR'
               : isImpact
               ? 'IMPACT DETECTED'
               : isMonitoring
@@ -273,8 +273,8 @@ export default function SensorDisplay({
         </View>
       )}
 
-      {/* Conditional State: Error */}
-      {activeError && !activeLoading && (
+      {/* Conditional State: Error — only show for real runtime errors, not for expected unavailability */}
+      {activeError && !activeLoading && activeAvailable !== false && (
         <View style={[styles.stateNotice, styles.noticeError]}>
           <Text style={styles.noticeTitleError}>🚨 Sensor Error</Text>
           <Text style={styles.noticeBodyError}>{activeError}</Text>
