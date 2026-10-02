@@ -22,7 +22,7 @@ import EmergencyContact from '../components/EmergencyContact';
 // MEMBER INTEGRATION IMPORTS
 // ============================================================================
 import LocationCard from '../components/LocationCard';    // MEMBER 2 - LOCATION
-// import EvidenceCard from '../components/EvidenceCard';    // MEMBER 3 - CAMERA / PHOTO EVIDENCE
+import EvidenceCard from '../components/EvidenceCard';    // MEMBER 3 - CAMERA / PHOTO EVIDENCE
 import SensorDisplay from '../components/SensorDisplay';     // MEMBER 4 - SENSOR
 import {
   clearEmergencyInformation,
@@ -108,6 +108,11 @@ export default function EmergencyScreen() {
   };
 
   // ----------------------------------------------------
+  // Member 3 - Camera & Photo Evidence State
+  // ----------------------------------------------------
+  const [photoUri, setPhotoUri] = useState(null);
+
+  // ----------------------------------------------------
   // Member 4 - Local Emergency Information Storage Handlers
   // ----------------------------------------------------
   const [savedEmergencyData, setSavedEmergencyData] = useState(null);
@@ -133,6 +138,8 @@ export default function EmergencyScreen() {
       category: selectedCategory,
       severity: severityLevel,
       notes: incidentNotes || 'No notes specified',
+      photoAttached: !!photoUri,
+      photoUri: photoUri || null,
       timestamp: new Date().toLocaleTimeString(),
       date: new Date().toLocaleDateString(),
     };
@@ -376,19 +383,13 @@ export default function EmergencyScreen() {
         {/* ============================================================ */}
         <View style={styles.section}>
           <Text style={styles.sectionHeader}>4. Photo Evidence</Text>
-          {/* 
-            MEMBER 3 INTEGRATION POINT:
-            When Member 3 completes their feature, import EvidenceCard:
-            import EvidenceCard from "../components/EvidenceCard";
-            <EvidenceCard />
-          */}
-          <StatusCard
-            title="Visual Evidence (EvidenceCard Integration Area)"
-            value="No Photo Attached (Placeholder)"
-            statusType="warning"
-            icon="📷"
-            badge="MEMBER 3 AREA"
-            description="Integration point for Member 3 EvidenceCard component and services/camera.js."
+          <EvidenceCard
+            imageUri={photoUri}
+            onCapture={(uri) => setPhotoUri(uri)}
+            onRemove={() => setPhotoUri(null)}
+            title="Photo Evidence"
+            subtitle="Capture incident scene for emergency responders"
+            allowLibrary={true}
           />
         </View>
 
