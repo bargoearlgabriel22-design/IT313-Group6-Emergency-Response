@@ -37,7 +37,7 @@ import {
   stopWebCameraStream,
 } from '../services/camera';
 
-import { saveEvidenceImage } from '../services/storage';
+import { saveEvidenceImage, deleteEvidenceByUri } from '../services/storage';
 
 // ────────────────────────────────────────────────────────────────────
 // EvidenceCard
@@ -47,8 +47,11 @@ export default function EvidenceCard({
   onCapture,
   onSelectImage,
   onDelete,
+  onRemove,
   description = '',
   disabled = false,
+  title = 'Photo Evidence',
+  subtitle = '',
 }) {
   // ── Internal state ──────────────────────────────────────────────
   const [internalUri, setInternalUri] = useState(null);
@@ -256,24 +259,52 @@ export default function EvidenceCard({
   };
 
   // ── DELETE PHOTO ────────────────────────────────────────────────
+  const executeDelete = async () => {
+    const uriToDelete = currentPhotoUri;
+    setInternalUri(null);
+    setErrorMessage(null);
+    setDescriptionText('');
+
+    if (uriToDelete) {
+      try {
+        await deleteEvidenceByUri(uriToDelete);
+      } catch (err) {
+        console.warn('Error deleting evidence from storage:', err);
+      }
+    }
+
+    if (typeof onDelete === 'function') onDelete();
+    if (typeof onRemove === 'function') onRemove();
+    if (typeof onCapture === 'function') onCapture(null);
+  };
+
   const handleDeletePhoto = () => {
-    Alert.alert(
-      '🗑️ Delete Evidence',
-      'Remove this photo from evidence? The file will also be deleted from device storage.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setInternalUri(null);
-            setErrorMessage(null);
-            if (typeof onDelete === 'function') onDelete();
-            else if (typeof onCapture === 'function') onCapture(null);
+    if (disabled || loading) return;
+
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof window !== 'undefined' && typeof window.confirm === 'function'
+          ? window.confirm(
+              'Remove this photo from evidence? The file will also be deleted from device storage.'
+            )
+          : true;
+      if (confirmed) {
+        executeDelete();
+      }
+    } else {
+      Alert.alert(
+        '🗑️ Delete Evidence',
+        'Remove this photo from evidence? The file will also be deleted from device storage.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: executeDelete,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   // ── RENDER ──────────────────────────────────────────────────────

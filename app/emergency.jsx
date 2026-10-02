@@ -202,7 +202,15 @@ export default function EmergencyScreen() {
           <EvidenceCard
             imageUri={photoUri}
             onCapture={(uri) => setPhotoUri(uri)}
-            onRemove={() => setPhotoUri(null)}
+            onSelectImage={(uri) => setPhotoUri(uri)}
+            onDelete={() => {
+              setPhotoUri(null);
+              setSavedInfo((prev) => (prev ? { ...prev, photoUri: null } : null));
+            }}
+            onRemove={() => {
+              setPhotoUri(null);
+              setSavedInfo((prev) => (prev ? { ...prev, photoUri: null } : null));
+            }}
             title="Photo Evidence"
             subtitle="Capture incident scene for emergency responders"
             allowLibrary={true}

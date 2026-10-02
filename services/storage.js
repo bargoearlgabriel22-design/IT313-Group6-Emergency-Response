@@ -328,6 +328,42 @@ export async function deleteEvidence(id) {
 }
 
 /**
+ * Deletes a single evidence item by its permanent URI.
+ *
+ * @param {string} uri
+ * @returns {Promise<{ success: boolean, error?: string }>}
+ */
+export async function deleteEvidenceByUri(uri) {
+  try {
+    if (!uri) return { success: true };
+    const result = await _loadEvidenceList();
+    if (result.success && Array.isArray(result.data)) {
+      const item = result.data.find((e) => e.permanentUri === uri);
+      if (item) {
+        return await deleteEvidence(item.id);
+      }
+    }
+
+    // Fallback: delete physical file on mobile if it exists
+    if (Platform.OS !== 'web' && typeof uri === 'string' && uri.startsWith('file://')) {
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+        if (info.exists) {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        }
+      } catch {}
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error?.message || 'Failed to delete evidence by URI.',
+    };
+  }
+}
+
+/**
  * Deletes ALL saved evidence:
  *   1. Removes all image files from the evidence directory (mobile).
  *   2. Clears the metadata list in AsyncStorage.
