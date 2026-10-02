@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Image,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Reusable Presentation Components (Member 1)
 import EmergencyButton from '../components/EmergencyButton';

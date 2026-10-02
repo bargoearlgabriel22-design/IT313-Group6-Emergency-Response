@@ -114,7 +114,6 @@ export async function capturePhoto(customOptions = {}) {
     const options = {
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3],
       quality: 0.85,
       ...customOptions,
     };
@@ -125,14 +124,14 @@ export async function capturePhoto(customOptions = {}) {
       return { success: false, canceled: true, uri: null };
     }
 
-    const uri =
-      result.assets && result.assets.length > 0 ? result.assets[0].uri : null;
+    const asset = result.assets && result.assets.length > 0 ? result.assets[0] : null;
+    const uri = asset?.uri || asset?.path || result.uri || result.path || null;
 
     if (!uri) {
       return { success: false, error: 'Camera returned no image URI.' };
     }
 
-    return { success: true, canceled: false, uri, asset: result.assets[0] };
+    return { success: true, canceled: false, uri, asset: asset || result };
   } catch (error) {
     return {
       success: false,
@@ -177,7 +176,6 @@ export async function pickImageFromLibrary(customOptions = {}) {
     const options = {
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3],
       quality: 0.85,
       ...customOptions,
     };
@@ -188,10 +186,14 @@ export async function pickImageFromLibrary(customOptions = {}) {
       return { success: false, canceled: true, uri: null };
     }
 
-    const uri =
-      result.assets && result.assets.length > 0 ? result.assets[0].uri : null;
+    const asset = result.assets && result.assets.length > 0 ? result.assets[0] : null;
+    const uri = asset?.uri || asset?.path || result.uri || result.path || null;
 
-    return { success: true, canceled: false, uri, asset: result.assets[0] };
+    if (!uri) {
+      return { success: false, error: 'Gallery returned no image URI.' };
+    }
+
+    return { success: true, canceled: false, uri, asset: asset || result };
   } catch (error) {
     return {
       success: false,
