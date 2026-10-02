@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -386,7 +387,15 @@ export default function EmergencyScreen() {
           <EvidenceCard
             imageUri={photoUri}
             onCapture={(uri) => setPhotoUri(uri)}
-            onRemove={() => setPhotoUri(null)}
+            onSelectImage={(uri) => setPhotoUri(uri)}
+            onDelete={() => {
+              setPhotoUri(null);
+              setSavedEmergencyData((prev) => (prev ? { ...prev, photoUri: null } : null));
+            }}
+            onRemove={() => {
+              setPhotoUri(null);
+              setSavedEmergencyData((prev) => (prev ? { ...prev, photoUri: null } : null));
+            }}
             title="Photo Evidence"
             subtitle="Capture incident scene for emergency responders"
             allowLibrary={true}
@@ -444,6 +453,20 @@ export default function EmergencyScreen() {
                   </Text>
                   <Text style={styles.storageDetailText} numberOfLines={2}>
                     • Notes: {savedEmergencyData.notes}
+                  </Text>
+                </View>
+              ) : null}
+
+              {savedEmergencyData?.photoUri ? (
+                <View style={styles.storagePhotoBox}>
+                  <Text style={styles.storagePhotoLabel}>📷 Photo Evidence Attached:</Text>
+                  <Image
+                    source={{ uri: savedEmergencyData.photoUri }}
+                    style={styles.storagePhotoPreview}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.storagePhotoNote}>
+                    ✅ Evidence photo linked to this saved incident report
                   </Text>
                 </View>
               ) : null}
@@ -802,5 +825,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  storagePhotoBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#DCFCE7',
+  },
+  storagePhotoLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  storagePhotoPreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
+  },
+  storagePhotoNote: {
+    fontSize: 11,
+    color: '#15803D',
+    marginTop: 4,
+    fontWeight: '500',
   },
 });

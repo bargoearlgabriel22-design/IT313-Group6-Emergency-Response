@@ -1,76 +1,77 @@
 // components/EvidenceCard.jsx
-// Member 3 - Camera & Photo Evidence Feature
-// Community Emergency Response Assistant
+// Member 3 — Camera & Permanent Image Storage Feature
+// Community Emergency Response Assistant — IT313 Group 6
 //
-// Platform-aware camera component:
-//   Mobile (Expo Go): uses expo-image-picker → launchCameraAsync → native camera
-//   Web (browser):    uses getUserMedia → live webcam feed → canvas capture
+// Platform-aware evidence card:
+//   Mobile (Expo Go): native camera → expo-file-system → persistent documentDirectory
+//   Web (browser):    getUserMedia webcam → canvas frame → base64 URI stored in state
+//
+// Props:
+//   imageUri      {string|null}   — controlled URI from parent (null = no photo yet)
+//   onCapture     {function}      — called with permanent URI after a successful save
+//   onSelectImage {function}      — called with permanent URI after gallery selection
+//   onDelete      {function}      — called when evidence is deleted
+//   description   {string}        — optional label shown under the preview
+//   disabled      {boolean}       — disable all interactions
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   Platform,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+
 import {
-  captureFrameFromVideo,
   capturePhoto,
+  captureFrameFromVideo,
   pickImageFromLibrary,
   requestCameraPermission,
   startWebCameraStream,
   stopWebCameraStream,
 } from '../services/camera';
 
-/**
- * EvidenceCard Component
- *
- * Role (Member 3 - Camera & Photo Evidence):
- * Reusable card for emergency incident photo documentation.
- * Handles both mobile (native camera) and web (live webcam) platforms.
- *
- * Props:
- * @param {string|null} imageUri     - Controlled photo URI from parent screen state
- * @param {function}    onCapture    - Callback when photo captured: (uri) => void
- * @param {string}      title        - Card title (default: "Photo Evidence")
- * @param {string}      subtitle     - Descriptive subtitle
- * @param {function}    onRemove     - Callback when photo is removed
- * @param {boolean}     allowLibrary - Show "Choose from Gallery" fallback (default: true)
- * @param {boolean}     disabled     - Disable all interactions
- */
+import { saveEvidenceImage, deleteEvidenceByUri } from '../services/storage';
+
+// ────────────────────────────────────────────────────────────────────
+// EvidenceCard
+// ────────────────────────────────────────────────────────────────────
 export default function EvidenceCard({
   imageUri = null,
   onCapture,
-  title = 'Photo Evidence',
-  subtitle = 'Visual incident documentation for responders',
+  onSelectImage,
+  onDelete,
   onRemove,
-  allowLibrary = true,
+  description = '',
   disabled = false,
+  title = 'Photo Evidence',
+  subtitle = '',
 }) {
-  // Internal state (uncontrolled fallback)
+  // ── Internal state ──────────────────────────────────────────────
   const [internalUri, setInternalUri] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState('Opening Camera…');
+  const [loadingMessage, setLoadingMessage] = useState('Working…');
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [descriptionText, setDescriptionText] = useState(description);
 
   // Web-camera states
   const [showWebCam, setShowWebCam] = useState(false);
   const [webStream, setWebStream] = useState(null);
-  const webCamContainerRef = useRef(null); // points to the DOM div
-  const videoElementRef = useRef(null);    // holds the <video> element
+  const webCamContainerRef = useRef(null);
+  const videoElementRef = useRef(null);
 
-  // Prefer prop URI if provided, otherwise use internal state
+  // Use prop URI if provided (controlled), otherwise internal
   const currentPhotoUri =
     imageUri !== undefined && imageUri !== null ? imageUri : internalUri;
 
-  // ────────────────────────────────────────────
-  // Web-only: attach MediaStream to <video> when webcam modal opens
-  // ────────────────────────────────────────────
+  // ── Web: inject live video into container div ───────────────────
   useEffect(() => {
     if (
       Platform.OS === 'web' &&
@@ -84,39 +85,104 @@ export default function EvidenceCard({
       video.playsInline = true;
       video.muted = true;
       video.style.cssText =
-        'width:100%;height:100%;object-fit:cover;border-radius:12px;display:block;background:#000;';
-
+        'width:100%;height:100%;object-fit:cover;border-radius:10px;display:block;background:#000;';
       const container = webCamContainerRef.current;
-      // Clear old content and inject video element
       while (container.firstChild) container.removeChild(container.firstChild);
       container.appendChild(video);
       videoElementRef.current = video;
     }
   }, [showWebCam, webStream]);
 
-  // Cleanup: release camera when component unmounts
+  // ── Cleanup webcam on unmount ───────────────────────────────────
   useEffect(() => {
     return () => {
       if (webStream) stopWebCameraStream(webStream);
     };
   }, [webStream]);
 
-  // ────────────────────────────────────────────
-  // TAKE PHOTO — dispatches to web or mobile handler
-  // ────────────────────────────────────────────
+  // ── Core: persist image to permanent storage ────────────────────
+  async function _persistImage(tempUri) {
+    setLoadingMessage('Saving image permanently…');
+    const saveResult = await saveEvidenceImage(tempUri, descriptionText);
+    if (!saveResult.success) {
+      setErrorMessage(saveResult.error || 'Failed to save image to device storage.');
+      return null;
+    }
+    return saveResult.evidence.permanentUri;
+  }
+
+  // ── TAKE PHOTO ──────────────────────────────────────────────────
   const handleTakePhoto = () => {
     if (disabled || loading) return;
     if (Platform.OS === 'web') {
-      handleTakePhotoWeb();
+      _openWebCam();
     } else {
-      handleTakePhotoMobile();
+      _takePhotoMobile();
     }
   };
 
-  // WEB: open live webcam using getUserMedia
-  const handleTakePhotoWeb = async () => {
+  async function _takePhotoMobile() {
     setLoading(true);
-    setLoadingMessage('Requesting Camera Access…');
+    setLoadingMessage('Opening camera…');
+    setPermissionDenied(false);
+    setErrorMessage(null);
+
+    const result = await capturePhoto();
+    if (result.permissionDenied) {
+      setLoading(false);
+      setPermissionDenied(true);
+      setErrorMessage(result.error);
+      return;
+    }
+    if (result.canceled || !result.success) {
+      setLoading(false);
+      if (!result.canceled) setErrorMessage(result.error || 'Camera capture failed.');
+      return;
+    }
+
+    // Permanently save the captured file
+    const permanentUri = await _persistImage(result.uri);
+    setLoading(false);
+    if (!permanentUri) return;
+
+    setInternalUri(permanentUri);
+    if (typeof onCapture === 'function') onCapture(permanentUri);
+  }
+
+  // ── PICK FROM GALLERY ───────────────────────────────────────────
+  const handlePickFromGallery = async () => {
+    if (disabled || loading) return;
+    setLoading(true);
+    setLoadingMessage('Opening gallery…');
+    setPermissionDenied(false);
+    setErrorMessage(null);
+
+    const result = await pickImageFromLibrary();
+    if (result.permissionDenied) {
+      setLoading(false);
+      setPermissionDenied(true);
+      setErrorMessage(result.error);
+      return;
+    }
+    if (result.canceled || !result.success) {
+      setLoading(false);
+      if (!result.canceled) setErrorMessage(result.error || 'Gallery selection failed.');
+      return;
+    }
+
+    const permanentUri = await _persistImage(result.uri);
+    setLoading(false);
+    if (!permanentUri) return;
+
+    setInternalUri(permanentUri);
+    if (typeof onSelectImage === 'function') onSelectImage(permanentUri);
+    else if (typeof onCapture === 'function') onCapture(permanentUri);
+  };
+
+  // ── WEB CAMERA ─────────────────────────────────────────────────
+  async function _openWebCam() {
+    setLoading(true);
+    setLoadingMessage('Requesting camera access…');
     setPermissionDenied(false);
     setErrorMessage(null);
 
@@ -128,98 +194,43 @@ export default function EvidenceCard({
       setErrorMessage(result.error);
       return;
     }
-
     if (!result.success) {
-      setErrorMessage(result.error || 'Failed to access the camera.');
+      setErrorMessage(result.error || 'Failed to start webcam.');
       return;
     }
-
-    // Stream ready — show modal with live video
     setWebStream(result.stream);
     setShowWebCam(true);
-  };
+  }
 
-  // WEB: capture a still frame from the live video feed
-  const handleWebCapture = () => {
+  const handleWebCapture = async () => {
     const captured = captureFrameFromVideo(videoElementRef.current);
-
     if (!captured.success) {
-      setErrorMessage(captured.error || 'Failed to capture photo.');
+      setErrorMessage(captured.error);
       return;
     }
-
     stopWebCameraStream(webStream);
     setWebStream(null);
     setShowWebCam(false);
 
-    setInternalUri(captured.uri);
-    if (typeof onCapture === 'function') onCapture(captured.uri);
+    setLoading(true);
+    const permanentUri = await _persistImage(captured.uri);
+    setLoading(false);
+    if (!permanentUri) return;
+
+    setInternalUri(permanentUri);
+    if (typeof onCapture === 'function') onCapture(permanentUri);
   };
 
-  // WEB: cancel without capturing
   const handleWebCamClose = () => {
     stopWebCameraStream(webStream);
     setWebStream(null);
     setShowWebCam(false);
   };
 
-  // MOBILE: native camera via expo-image-picker
-  const handleTakePhotoMobile = async () => {
-    setLoading(true);
-    setLoadingMessage('Opening Camera…');
-    setPermissionDenied(false);
-    setErrorMessage(null);
-
-    const result = await capturePhoto();
-    setLoading(false);
-
-    if (result.permissionDenied) {
-      setPermissionDenied(true);
-      setErrorMessage(result.error);
-      return;
-    }
-    if (result.canceled) return;
-    if (!result.success) {
-      setErrorMessage(result.error || 'Failed to capture photo.');
-      return;
-    }
-    if (result.uri) {
-      setInternalUri(result.uri);
-      if (typeof onCapture === 'function') onCapture(result.uri);
-    }
-  };
-
-  // GALLERY: pick from photo library
-  const handlePickFromLibrary = async () => {
-    if (disabled || loading) return;
-    setLoading(true);
-    setLoadingMessage('Opening Photo Library…');
-    setPermissionDenied(false);
-    setErrorMessage(null);
-
-    const result = await pickImageFromLibrary();
-    setLoading(false);
-
-    if (result.permissionDenied) {
-      setPermissionDenied(true);
-      setErrorMessage(result.error);
-      return;
-    }
-    if (result.canceled) return;
-    if (!result.success) {
-      setErrorMessage(result.error || 'Failed to select photo.');
-      return;
-    }
-    if (result.uri) {
-      setInternalUri(result.uri);
-      if (typeof onCapture === 'function') onCapture(result.uri);
-    }
-  };
-
-  // Retry after permission denial
+  // ── RETRY PERMISSION ────────────────────────────────────────────
   const handleRetryPermission = async () => {
     setLoading(true);
-    setLoadingMessage('Requesting Camera Permission…');
+    setLoadingMessage('Requesting permission…');
     setErrorMessage(null);
 
     if (Platform.OS === 'web') {
@@ -235,36 +246,72 @@ export default function EvidenceCard({
       return;
     }
 
-    const permission = await requestCameraPermission();
+    const perm = await requestCameraPermission();
     setLoading(false);
-    if (permission.granted) {
+    if (perm.granted) {
       setPermissionDenied(false);
-      handleTakePhotoMobile();
+      _takePhotoMobile();
     } else {
-      setPermissionDenied(true);
       setErrorMessage(
-        'Camera permission is still denied. Please enable camera access in your device settings.'
+        'Permission still denied. Enable camera access in your device settings.'
       );
     }
   };
 
-  // Remove current photo
-  const handleRemovePhoto = () => {
+  // ── DELETE PHOTO ────────────────────────────────────────────────
+  const executeDelete = async () => {
+    const uriToDelete = currentPhotoUri;
     setInternalUri(null);
     setErrorMessage(null);
-    if (typeof onRemove === 'function') {
-      onRemove();
-    } else if (typeof onCapture === 'function') {
-      onCapture(null);
+    setDescriptionText('');
+
+    if (uriToDelete) {
+      try {
+        await deleteEvidenceByUri(uriToDelete);
+      } catch (err) {
+        console.warn('Error deleting evidence from storage:', err);
+      }
+    }
+
+    if (typeof onDelete === 'function') onDelete();
+    if (typeof onRemove === 'function') onRemove();
+    if (typeof onCapture === 'function') onCapture(null);
+  };
+
+  const handleDeletePhoto = () => {
+    if (disabled || loading) return;
+
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof window !== 'undefined' && typeof window.confirm === 'function'
+          ? window.confirm(
+              'Remove this photo from evidence? The file will also be deleted from device storage.'
+            )
+          : true;
+      if (confirmed) {
+        executeDelete();
+      }
+    } else {
+      Alert.alert(
+        '🗑️ Delete Evidence',
+        'Remove this photo from evidence? The file will also be deleted from device storage.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: executeDelete,
+          },
+        ]
+      );
     }
   };
 
+  // ── RENDER ──────────────────────────────────────────────────────
   return (
     <View style={styles.card}>
 
-      {/* ──────────────────────────────────────── */}
-      {/* WEB CAMERA MODAL (live webcam + capture) */}
-      {/* ──────────────────────────────────────── */}
+      {/* ── Web Webcam Modal ── */}
       {Platform.OS === 'web' ? (
         <Modal
           visible={showWebCam}
@@ -274,200 +321,183 @@ export default function EvidenceCard({
         >
           <View style={styles.webCamOverlay}>
             <View style={styles.webCamContainer}>
-
-              {/* Modal Header */}
               <View style={styles.webCamHeader}>
-                <Text style={styles.webCamHeaderText}>📷 Camera — Evidence Capture</Text>
-                <TouchableOpacity
-                  onPress={handleWebCamClose}
-                  style={styles.webCamCloseBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.webCamCloseBtnText}>✕</Text>
+                <Text style={styles.webCamTitle}>📷 Camera — Evidence Capture</Text>
+                <TouchableOpacity onPress={handleWebCamClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.webCamCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Live Video Feed — DOM video element injected via useEffect */}
-              <View
-                ref={webCamContainerRef}
-                style={styles.webCamVideoBox}
-              />
-
-              <Text style={styles.webCamInstructions}>
-                Position the incident scene in the frame, then tap Capture.
+              <View ref={webCamContainerRef} style={styles.webCamVideoBox} />
+              <Text style={styles.webCamHint}>
+                Position the incident scene, then tap Capture.
               </Text>
-
-              {/* Capture Button */}
               <TouchableOpacity
                 style={styles.webCamCaptureBtn}
                 onPress={handleWebCapture}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
                 <Text style={styles.webCamCaptureBtnText}>📸 Capture Photo</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.webCamCancelBtn}
-                onPress={handleWebCamClose}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.webCamCancelBtnText}>Cancel</Text>
+              <TouchableOpacity style={styles.webCamCancelBtn} onPress={handleWebCamClose}>
+                <Text style={styles.webCamCancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
       ) : null}
 
-      {/* ──────────────────────────────────────── */}
-      {/* CARD HEADER                              */}
-      {/* ──────────────────────────────────────── */}
+      {/* ── Card Header ── */}
       <View style={styles.headerRow}>
-        <View style={styles.titleContainer}>
+        <View style={styles.headerLeft}>
           <Text style={styles.headerIcon}>📷</Text>
           <View>
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            <Text style={styles.headerTitle}>Photo Evidence</Text>
+            <Text style={styles.headerSubtitle}>
+              {currentPhotoUri
+                ? 'Image saved to device storage'
+                : 'Capture or select incident photo'}
+            </Text>
           </View>
         </View>
-        {currentPhotoUri ? (
-          <View style={styles.badgeSuccess}>
-            <Text style={styles.badgeTextSuccess}>ATTACHED</Text>
-          </View>
-        ) : (
-          <View style={styles.badgeNeutral}>
-            <Text style={styles.badgeTextNeutral}>OPTIONAL</Text>
-          </View>
-        )}
+        <View style={currentPhotoUri ? styles.badgeGreen : styles.badgeGray}>
+          <Text style={currentPhotoUri ? styles.badgeTextGreen : styles.badgeTextGray}>
+            {currentPhotoUri ? 'SAVED' : 'EMPTY'}
+          </Text>
+        </View>
       </View>
 
-      {/* ──────────────────────────────────────── */}
-      {/* STATE 1: LOADING                         */}
-      {/* ──────────────────────────────────────── */}
+      {/* ── STATE: Loading ── */}
       {loading ? (
-        <View style={styles.loadingContainer}>
+        <View style={styles.loadingBox}>
           <ActivityIndicator size="large" color="#DC2626" />
           <Text style={styles.loadingText}>{loadingMessage}</Text>
-          <Text style={styles.loadingSubtext}>
+          <Text style={styles.loadingHint}>
             {Platform.OS === 'web'
-              ? 'Allow camera access in the browser permission prompt.'
-              : 'Please wait while device hardware responds.'}
+              ? 'Allow camera in the browser permission prompt.'
+              : 'Please wait…'}
           </Text>
         </View>
       ) : null}
 
-      {/* ──────────────────────────────────────── */}
-      {/* STATE 2: PERMISSION DENIED               */}
-      {/* ──────────────────────────────────────── */}
+      {/* ── STATE: Permission Denied ── */}
       {!loading && permissionDenied ? (
-        <View style={styles.warningContainer}>
-          <Text style={styles.warningIcon}>⚠️</Text>
-          <Text style={styles.warningTitle}>Camera Permission Required</Text>
-          <Text style={styles.warningDescription}>
-            {errorMessage ||
-              'Camera permission was denied. Access is required to capture live incident photos.'}
+        <View style={styles.deniedBox}>
+          <Text style={styles.deniedIcon}>⚠️</Text>
+          <Text style={styles.deniedTitle}>Camera Permission Required</Text>
+          <Text style={styles.deniedDesc}>
+            {errorMessage || 'Camera access is required to capture photo evidence.'}
           </Text>
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={handleRetryPermission}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.retryButtonText}>🔄 Grant Permission & Try Again</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={handleRetryPermission}>
+            <Text style={styles.retryBtnText}>🔄 Grant Permission & Retry</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
-      {/* Generic Error Banner */}
+      {/* ── Error Banner ── */}
       {!loading && !permissionDenied && errorMessage ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
-          <TouchableOpacity
-            onPress={() => setErrorMessage(null)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.dismissText}>✕</Text>
+          <Text style={styles.errorText} numberOfLines={2}>⚠️ {errorMessage}</Text>
+          <TouchableOpacity onPress={() => setErrorMessage(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.errorDismiss}>✕</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
-      {/* ──────────────────────────────────────── */}
-      {/* STATE 3: PHOTO CAPTURED                  */}
-      {/* ──────────────────────────────────────── */}
+      {/* ── STATE: Photo Captured — show preview ── */}
       {!loading && !permissionDenied && currentPhotoUri ? (
-        <View style={styles.evidenceArea}>
+        <View>
           <View style={styles.imageWrapper}>
             <Image
               source={{ uri: currentPhotoUri }}
               style={styles.previewImage}
               resizeMode="cover"
             />
-            <View style={styles.imageOverlayBadge}>
-              <Text style={styles.imageOverlayBadgeText}>✓ EVIDENCE CAPTURED</Text>
+            <View style={styles.imageBadge}>
+              <Text style={styles.imageBadgeText}>✓ EVIDENCE CAPTURED</Text>
             </View>
           </View>
-          <Text style={styles.evidenceNote}>
-            Visual documentation attached to current incident dispatch.
+
+          {/* Description field */}
+          <TextInput
+            style={styles.descriptionInput}
+            placeholder="Add a description (optional)…"
+            placeholderTextColor="#94A3B8"
+            value={descriptionText}
+            onChangeText={setDescriptionText}
+            multiline
+            numberOfLines={2}
+            editable={!disabled}
+          />
+
+          <Text style={styles.storageNote}>
+            📂 File saved permanently in device document storage.
           </Text>
+
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={[styles.actionButton, styles.retakeButton]}
+              style={[styles.actionBtn, styles.retakeBtn]}
               onPress={handleTakePhoto}
-              activeOpacity={0.7}
               disabled={disabled}
+              activeOpacity={0.7}
             >
-              <Text style={styles.retakeButtonText}>🔄 Retake Photo</Text>
+              <Text style={styles.retakeBtnText}>🔄 Retake</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionButton, styles.removeButton]}
-              onPress={handleRemovePhoto}
-              activeOpacity={0.7}
+              style={[styles.actionBtn, styles.galleryBtn]}
+              onPress={handlePickFromGallery}
               disabled={disabled}
+              activeOpacity={0.7}
             >
-              <Text style={styles.removeButtonText}>🗑️ Remove</Text>
+              <Text style={styles.galleryBtnText}>🖼️ Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.deleteBtn]}
+              onPress={handleDeletePhoto}
+              disabled={disabled}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.deleteBtnText}>🗑️ Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
       ) : null}
 
-      {/* ──────────────────────────────────────── */}
-      {/* STATE 4: NO PHOTO YET                    */}
-      {/* ──────────────────────────────────────── */}
+      {/* ── STATE: No Photo Yet ── */}
       {!loading && !permissionDenied && !currentPhotoUri ? (
-        <View style={styles.placeholderContainer}>
-          <View style={styles.dashedBox}>
-            <Text style={styles.cameraPlaceholderIcon}>📸</Text>
-            <Text style={styles.placeholderHeading}>No Photo Evidence Yet</Text>
-            <Text style={styles.placeholderSub}>
-              Attach a photo of the incident scene to assist arriving emergency units.
-            </Text>
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>📸</Text>
+          <Text style={styles.emptyTitle}>No Photo Evidence Yet</Text>
+          <Text style={styles.emptyNote}>
+            Attach a photo of the incident scene to assist emergency responders.
+            Images are saved permanently to your device.
+          </Text>
 
-            {/* Primary: Camera */}
-            <TouchableOpacity
-              style={styles.captureButton}
-              onPress={handleTakePhoto}
-              activeOpacity={0.8}
-              disabled={disabled}
-            >
-              <Text style={styles.captureButtonText}>📷 Take Photo Evidence</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.captureBtn}
+            onPress={handleTakePhoto}
+            disabled={disabled}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.captureBtnText}>📷 Take Photo Evidence</Text>
+          </TouchableOpacity>
 
-            {/* Secondary: Gallery */}
-            {allowLibrary ? (
-              <TouchableOpacity
-                style={styles.libraryButton}
-                onPress={handlePickFromLibrary}
-                activeOpacity={0.7}
-                disabled={disabled}
-              >
-                <Text style={styles.libraryButtonText}>🖼️ Choose from Gallery</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <TouchableOpacity
+            style={styles.galleryPickBtn}
+            onPress={handlePickFromGallery}
+            disabled={disabled}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.galleryPickBtnText}>🖼️ Choose from Gallery</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
     </View>
   );
 }
 
+// ────────────────────────────────────────────────────────────────────
+// STYLES
+// ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
@@ -483,51 +513,36 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 
-  // ── Header ──
+  // Header
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   headerIcon: { fontSize: 22, marginRight: 10 },
-  title: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
-  subtitle: { fontSize: 12, color: '#64748B', marginTop: 1 },
-  badgeSuccess: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  badgeTextSuccess: { color: '#166534', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  badgeNeutral: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  badgeTextNeutral: { color: '#64748B', fontSize: 10, fontWeight: '600', letterSpacing: 0.5 },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
+  headerSubtitle: { fontSize: 11, color: '#64748B', marginTop: 1 },
+  badgeGreen: { backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  badgeTextGreen: { color: '#166534', fontSize: 10, fontWeight: '800' },
+  badgeGray: { backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  badgeTextGray: { color: '#64748B', fontSize: 10, fontWeight: '600' },
 
-  // ── Loading ──
-  loadingContainer: {
+  // Loading
+  loadingBox: {
     paddingVertical: 32,
     alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  loadingText: { fontSize: 15, fontWeight: '600', color: '#0F172A', marginTop: 12 },
-  loadingSubtext: { fontSize: 12, color: '#64748B', marginTop: 4, textAlign: 'center', paddingHorizontal: 16 },
+  loadingText: { fontSize: 14, fontWeight: '600', color: '#0F172A', marginTop: 12 },
+  loadingHint: { fontSize: 11, color: '#64748B', marginTop: 4, textAlign: 'center', paddingHorizontal: 20 },
 
-  // ── Permission Denied ──
-  warningContainer: {
+  // Permission denied
+  deniedBox: {
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
@@ -535,64 +550,99 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
-  warningIcon: { fontSize: 28, marginBottom: 6 },
-  warningTitle: { fontSize: 15, fontWeight: '700', color: '#991B1B', marginBottom: 4 },
-  warningDescription: {
-    fontSize: 13,
-    color: '#7F1D1D',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  retryButton: {
+  deniedIcon: { fontSize: 28, marginBottom: 6 },
+  deniedTitle: { fontSize: 14, fontWeight: '700', color: '#991B1B', marginBottom: 4 },
+  deniedDesc: { fontSize: 12, color: '#7F1D1D', textAlign: 'center', lineHeight: 17, marginBottom: 14 },
+  retryBtn: {
     backgroundColor: '#DC2626',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    alignItems: 'center',
   },
-  retryButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  retryBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
 
-  // ── Error Banner ──
+  // Error banner
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#FDE68A',
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  errorText: { fontSize: 12, color: '#92400E', flex: 1 },
-  dismissText: { fontSize: 14, color: '#92400E', fontWeight: '700', paddingLeft: 8 },
+  errorText: { fontSize: 11, color: '#92400E', flex: 1 },
+  errorDismiss: { fontSize: 14, color: '#92400E', fontWeight: '700', paddingLeft: 8 },
 
-  // ── No Photo Yet ──
-  placeholderContainer: { marginTop: 4 },
-  dashedBox: {
+  // Photo preview
+  imageWrapper: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    marginBottom: 10,
+  },
+  previewImage: { width: '100%', height: 220, borderRadius: 12 },
+  imageBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(15,23,42,0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  imageBadgeText: { color: '#4ADE80', fontSize: 11, fontWeight: '700' },
+  storageNote: { fontSize: 11, color: '#166534', marginBottom: 10 },
+  descriptionInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+    minHeight: 48,
+    textAlignVertical: 'top',
+  },
+  actionRow: { flexDirection: 'row', gap: 8 },
+  actionBtn: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center' },
+  retakeBtn: { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
+  retakeBtnText: { color: '#0F172A', fontSize: 12, fontWeight: '600' },
+  galleryBtn: { backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#BFDBFE' },
+  galleryBtnText: { color: '#1E40AF', fontSize: 12, fontWeight: '600' },
+  deleteBtn: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  deleteBtnText: { color: '#DC2626', fontSize: 12, fontWeight: '600' },
+
+  // Empty state
+  emptyBox: {
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: '#CBD5E1',
     borderRadius: 12,
     backgroundColor: '#F8FAFC',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
     alignItems: 'center',
   },
-  cameraPlaceholderIcon: { fontSize: 36, marginBottom: 8 },
-  placeholderHeading: { fontSize: 15, fontWeight: '700', color: '#1E293B', marginBottom: 4 },
-  placeholderSub: {
+  emptyIcon: { fontSize: 36, marginBottom: 8 },
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: '#1E293B', marginBottom: 4 },
+  emptyNote: {
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 16,
+    lineHeight: 17,
+    marginBottom: 18,
   },
-  captureButton: {
+  captureBtn: {
     backgroundColor: '#DC2626',
-    paddingVertical: 12,
+    paddingVertical: 13,
     paddingHorizontal: 20,
     borderRadius: 10,
     width: '100%',
@@ -602,58 +652,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 2,
+    marginBottom: 8,
   },
-  captureButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-  libraryButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  libraryButtonText: { color: '#475569', fontSize: 12, fontWeight: '600' },
+  captureBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  galleryPickBtn: { paddingVertical: 8, alignItems: 'center' },
+  galleryPickBtnText: { color: '#475569', fontSize: 12, fontWeight: '600' },
 
-  // ── Photo Captured ──
-  evidenceArea: { marginTop: 4 },
-  imageWrapper: {
-    position: 'relative',
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#0F172A',
-  },
-  previewImage: { width: '100%', height: 220, borderRadius: 12 },
-  imageOverlayBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  imageOverlayBadgeText: {
-    color: '#4ADE80',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  evidenceNote: { fontSize: 12, color: '#64748B', marginTop: 8, marginBottom: 12 },
-  actionRow: { flexDirection: 'row', gap: 10 },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retakeButton: { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' },
-  retakeButtonText: { color: '#0F172A', fontSize: 13, fontWeight: '600' },
-  removeButton: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
-  removeButtonText: { color: '#DC2626', fontSize: 13, fontWeight: '600' },
-
-  // ── Web Camera Modal ──
+  // Web Webcam Modal
   webCamOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
@@ -676,25 +681,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
   },
-  webCamHeaderText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  webCamCloseBtn: { padding: 4 },
-  webCamCloseBtnText: { color: '#94A3B8', fontSize: 20, fontWeight: '700' },
+  webCamTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  webCamCloseText: { color: '#94A3B8', fontSize: 20, fontWeight: '700' },
   webCamVideoBox: {
     width: '100%',
     height: 300,
     backgroundColor: '#1E293B',
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  webCamInstructions: {
+  webCamHint: {
     color: '#94A3B8',
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 14,
-    lineHeight: 16,
   },
   webCamCaptureBtn: {
     backgroundColor: '#DC2626',
@@ -702,13 +705,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     marginBottom: 10,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
   },
-  webCamCaptureBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  webCamCancelBtn: { paddingVertical: 10, alignItems: 'center' },
-  webCamCancelBtnText: { color: '#64748B', fontSize: 13, fontWeight: '500' },
+  webCamCaptureBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  webCamCancelBtn: { paddingVertical: 8, alignItems: 'center' },
+  webCamCancelText: { color: '#64748B', fontSize: 12 },
 });
