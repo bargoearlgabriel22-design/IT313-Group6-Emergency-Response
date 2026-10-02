@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Alert,
+  Image,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -62,11 +63,11 @@ export default function EmergencyScreen() {
     })();
   }, []);
 
-  // Member 3 - Save demo emergency info to storage
+  // Member 3 - Save emergency info (includes current photo if captured)
   const handleSaveEmergencyInfo = async () => {
     setSavingInfo(true);
     setStorageError(null);
-    const demoInfo = {
+    const infoToSave = {
       name: 'Emergency Responder',
       contactNumber: '911',
       address: 'Current Location',
@@ -74,11 +75,13 @@ export default function EmergencyScreen() {
       allergies: 'None',
       notes: 'Community emergency response active.',
       savedAt: new Date().toISOString(),
+      // Include captured photo URI so it displays inside the saved card
+      photoUri: photoUri || null,
     };
-    const result = await saveEmergencyInfo(demoInfo);
+    const result = await saveEmergencyInfo(infoToSave);
     setSavingInfo(false);
     if (result.success) {
-      setSavedInfo(demoInfo);
+      setSavedInfo(infoToSave);
       Alert.alert('✅ Saved', 'Emergency information saved to device storage.');
     } else {
       setStorageError(result.error);
@@ -291,6 +294,28 @@ export default function EmergencyScreen() {
                     <Text style={styles.storageDataValue}>{savedInfo.notes}</Text>
                   </View>
                 ) : null}
+
+                {/* ── Photo Evidence preview inside the storage card ── */}
+                {savedInfo.photoUri ? (
+                  <View style={styles.storagePhotoBox}>
+                    <Text style={styles.storagePhotoLabel}>📷 Photo Evidence</Text>
+                    <Image
+                      source={{ uri: savedInfo.photoUri }}
+                      style={styles.storagePhotoPreview}
+                      resizeMode="cover"
+                    />
+                    <Text style={styles.storagePhotoNote}>
+                      ✅ Evidence photo linked to this record
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.storagePhotoEmptyBox}>
+                    <Text style={styles.storagePhotoEmptyText}>
+                      📸 No photo attached — capture a photo above and Save Info again.
+                    </Text>
+                  </View>
+                )}
+
                 {savedInfo.savedAt ? (
                   <Text style={styles.storageSavedAt}>
                     ✅ Saved: {new Date(savedInfo.savedAt).toLocaleString()}
@@ -588,5 +613,44 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // ── Photo preview inside storage card ──
+  storagePhotoBox: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 10,
+  },
+  storagePhotoLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  storagePhotoPreview: {
+    width: '100%',
+    height: 180,
+    borderRadius: 10,
+    backgroundColor: '#0F172A',
+  },
+  storagePhotoNote: {
+    fontSize: 11,
+    color: '#166534',
+    marginTop: 6,
+  },
+  storagePhotoEmptyBox: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+  },
+  storagePhotoEmptyText: {
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
   },
 });
